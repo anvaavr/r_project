@@ -1,0 +1,235 @@
+---
+title: "Regression"
+output:
+  pdf_document: default
+  html_document: default
+date: '2022-06-11'
+---
+
+
+
+### Q1
+
+## Loading csv file
+
+```{r echo=TRUE,message=FALSE}
+options(warn = -1)
+library(readr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+df <- read_csv("C://Users//Amit//Downloads//Data11.csv")
+
+df2 <- df %>%  dplyr::select(IMPACT, SUBSTANCE, MEANINGFUL_COMPARISON, ORIGINALITY,RECOMMENDATION, 
+                             SOUNDNESS_CORRECTNESS, CLARITY, REVIEWER_CONFIDENCE, APPROPRIATENESS)
+
+df1 <- df %>% select(IMPACT, SUBSTANCE, MEANINGFUL_COMPARISON, ORIGINALITY,RECOMMENDATION, 
+                     SOUNDNESS_CORRECTNESS, CLARITY, REVIEWER_CONFIDENCE, APPROPRIATENESS)
+```
+
+## Classify reviewer confidence to 0 or 1
+
+```{r echo=TRUE,message=FALSE}
+
+df1$REVIEWER_CONFIDENCE[df1$REVIEWER_CONFIDENCE<4] <- 0
+df1$REVIEWER_CONFIDENCE[df1$REVIEWER_CONFIDENCE>=4] <- 1
+```
+
+## Split the data to train and test
+
+
+```{r echo=TRUE,message=FALSE}
+
+sample <- sample(c(TRUE, FALSE), nrow(df1), replace=TRUE, prob=c(0.7,0.3))
+train  <- df1[sample, ]
+test   <- df1[!sample, ]
+```
+
+
+## Logistic Regression
+
+
+```{r echo=TRUE,message=FALSE}
+model <- glm(REVIEWER_CONFIDENCE ~ IMPACT + SUBSTANCE + APPROPRIATENESS+  MEANINGFUL_COMPARISON +
+               RECOMMENDATION+ 
+               ORIGINALITY +  SOUNDNESS_CORRECTNESS + CLARITY , data = train, family = "binomial")
+fitted.results <- predict(model,test,type='response')
+fitted.results1 <- ifelse(fitted.results > 0.75,1,0)
+```
+
+
+## ROC curve and PRC curve
+
+
+```{r echo=TRUE,message=FALSE}
+
+library(precrec)
+m <- evalmod(scores=fitted.results1,labels=test$REVIEWER_CONFIDENCE)
+autoplot(m)
+
+aucs <- auc(m)
+knitr::kable(aucs)
+
+```
+
+
+## confusion matrix
+
+```{r echo=TRUE,message=FALSE}
+
+library(caret)
+library(InformationValue)
+library(ISLR)
+confusionMatrix(fitted.results1,test$REVIEWER_CONFIDENCE)
+
+
+```
+
+
+
+##  Estimating the success of the Logistic Regression with different tests
+```{r echo=TRUE,message=FALSE}
+
+
+ 
+error_metric=function(CM)
+{
+   
+  TN =CM[1,1]
+  TP =CM[2,2]
+  FP =CM[1,2]
+  FN =CM[2,1]
+  precision =(TP)/(TP+FP)
+  accuracy_model  =(TP+TN)/(TP+TN+FP+FN)
+  recall = (TP)/(TP+FN)
+  f1 = (2*(precision*recall))/(precision+recall)
+  print(paste("Recall value of the model: ",round(recall,2)))
+  print(paste("Precision value of the model: ",round(precision,2)))
+  print(paste("Accuracy of the model: ",round(accuracy_model,2)))
+  print(paste("f1 of the model: ",round(f1,2)))
+
+   
+}
+CM=table(test$REVIEWER_CONFIDENCE,fitted.results1)
+error_metric(CM)
+```
+
+
+##  Feature selection for multiple linear regression
+
+
+## perform k-fold cross-validation to find optimal lambda value
+
+```{r echo=TRUE,message=FALSE}
+
+library(glmnet)
+y<- df2$REVIEWER_CONFIDENCE
+x <- data.matrix(df2[,c('IMPACT' ,'SUBSTANCE' , 'MEANINGFUL_COMPARISON','RECOMMENDATION', 
+                        'ORIGINALITY','APPROPRIATENESS',  'SOUNDNESS_CORRECTNESS', 'CLARITY')])
+
+
+cv_model <- cv.glmnet(x, y, alpha = 1)
+```
+
+
+## Find optimal lambda value that minimizes test MSE
+
+```{r echo=TRUE,message=FALSE}
+best_lambda <- cv_model$lambda.min
+best_lambda
+```
+
+## Plotting lambda and the coefficients of the independent varibales
+
+```{r echo=TRUE,message=FALSE}
+plot(cv_model)
+best_model <- glmnet(x, y, alpha = 1, lambda = best_lambda)
+print(coef(best_model))
+```
+
+
+## Multiple linear regression based on the feature selection
+
+
+
+```{r echo=TRUE,message=FALSE}
+
+ggplot(df2, aes(x = CLARITY+IMPACT+SUBSTANCE+ORIGINALITY+
+                  APPROPRIATENESS+RECOMMENDATION,  y = REVIEWER_CONFIDENCE,color=IMPACT)) + 
+  geom_smooth(method="lm",col = "light blue3")+theme_light()+
+  theme(axis.title.x = element_text(size = 10)) +
+  labs(x= "CLARITY+IMPACT+SUBSTANCE+ ORIGINALITY+APPROPRIATENESS+RECOMMENDATION",
+       title ="Linear regression")                                           
+ 
+
+model1 <- lm(REVIEWER_CONFIDENCE ~ IMPACT + SUBSTANCE + 
+               APPROPRIATENESS + ORIGINALITY  + CLARITY , data = df2)
+summary(model1)
+
+
+
+```
+## Reviewer confidence disturbution for different ratings of Imapct
+
+```{r echo=TRUE,message=FALSE}
+ggplot(data = df, aes(x = REVIEWER_CONFIDENCE)) + geom_bar(fill="purple") +
+  facet_wrap(~ IMPACT)+
+  labs(
+    x = "REVIEWER_CONFIDENCE",
+    y = "IMPACT",
+    title = "Show each IMPACT rating",
+    subtitle = "with each CONFIDENCE rating"
+  )
+```
+
+
+## Reviewer confidence disturbution for different ratings of Originality
+
+
+
+```{r echo=TRUE,message=FALSE}
+ggplot(data = df, aes(x = REVIEWER_CONFIDENCE)) + geom_bar(fill="red4") +
+  facet_wrap(~ ORIGINALITY)+
+  labs(
+    x = "REVIEWER_CONFIDENCE",
+    y = "ORIGINALITY",
+    title = "Show each ORIGINALITY rating",
+    subtitle = "with each CONFIDENCE rating"
+  )
+```
+
+## Reviewer confidence disturbution for different ratings of Approriateness
+
+
+```{r echo=TRUE,message=FALSE}
+ggplot(data = df, aes(x = REVIEWER_CONFIDENCE)) + geom_bar(fill="orange2") +
+  facet_wrap(~ APPROPRIATENESS)+
+  labs(
+    x = "REVIEWER_CONFIDENCE",
+    y = "APPROPRIATENESS",
+    title = "Show each APPROPRIATENESS rating",
+    subtitle = "with each CONFIDENCE rating"
+  )
+```
+```{r echo=TRUE,message=FALSE}
+df4 <- df[, c("REVIEWER_CONFIDENCE", "conference")]
+df4 %>% filter(df4$conference == "acl_2017")
+
+```
+
+
+## Reviewer confidence disturbution for ACL 2017 conference 
+
+
+```{r echo=TRUE,message=FALSE}
+ggplot(df4, aes(x= REVIEWER_CONFIDENCE))+
+  geom_bar(fill = "#FF6666")+theme_classic() + labs(
+    x = "Reviewer confidence",
+    y = "numbr of ratings",
+    title = "Reviewer confidence disturbution for ACL 2017 conference",
+   
+  )
+
+```
+
+
